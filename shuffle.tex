@@ -1,0 +1,234 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsfonts,amssymb,amsthm,eucal,amsmath}
+\usepackage{graphicx}
+\usepackage[T1]{fontenc}
+\usepackage{latexsym,url}
+\usepackage{array}
+\usepackage{subfig}
+\usepackage{comment}
+\usepackage{color}
+\usepackage{hyperref}
+\usepackage{cprotect}
+
+\newcommand{\myspace}{\vspace{.1in}\noindent}
+\newcommand{\mymyspace}{\vspace{.1in}}
+\usepackage[inner=30mm, outer=30mm, textheight=225mm]{geometry}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{prop}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{defn}[theorem]{Definition}
+\newtheorem{notn}[theorem]{Notation}
+\newtheorem{cond}[theorem]{Condition}
+\newtheorem{ex}[theorem]{Example}
+\newtheorem{rmk}[theorem]{Remark}
+\newcommand{\co}{\negthinspace :}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\Q}{\mathbb{Q}}
+\newcommand{\Z}{\mathbb{Z}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\CP}{\mathbb{CP}}
+\newcommand{\PSL}{\mathrm{PSL}_2(\mathbb{C})}
+\newcommand{\area}{\operatorname{area}}
+\newcommand{\rand}{\operatorname{rand}}
+\newcommand{\diag}{\operatorname{diag}}
+\newcommand{\op}{\operatorname{op}}
+\newcommand{\nt}{\negthinspace}
+\newcommand{\halpha}{\hat{\alpha}}
+\newcommand{\hbeta}{\hat{\beta}}
+\newcommand{\TODO}{{\color{red} TODO}}
+\newcommand{\MW}[1]{\textcolor{blue}{\bf[MW: #1]}}
+
+\newcommand{\blue}[1]{{\color{blue} #1}}
+\newcommand{\move}[1]{\tag{\blue{#1}}}
+
+\title{Interactive algebraic manipulation}
+\author{Geoffrey Irving\thanks{Otherlab, \url{irving@naml.us}}}
+
+\begin{document}
+\maketitle
+
+\section{Problem}
+
+I want an iPad app for manipulating algebraic formulas built on iterating the following operation:
+\begin{enumerate}
+\item Make an incorrect change to the formula, either by editing it explicitly, or dragging some terms
+      around via touchscreen.
+\item Run an algorithm that makes the smallest possible change to the new formula that (1) produces a
+      correct formula and (2) doesn't undo the user's move.
+\item If (2) times out, or the smallest found change is too large, highlight the terms that seem to
+      contribute to the problem. If that fails, just mark the whole thing red.
+\end{enumerate}
+
+What would it take to implement this?  We will focus on the case of bidirectional equivalence, where
+we start with an equation $f(x_i) = 0$ and transition through a series of equations $f_k(x_i) = 0$
+with $f = f_0$ s.t.\ each pair of equations is equivalent.
+
+We will require a routine answering the following question: does $f(x_i) = 0$ imply $g(x_i) = 0$?
+I believe it's not to hard to implement this, at least approximately, for $f$ and $g$ including
+rational functions and square roots.  For details, see
+\url{http://rjlipton.files.wordpress.com/2009/11/schwartz.pdf}.
+
+\newpage
+\section{Example}
+
+As a concrete example of a derivation, consider a ball mill of radius $R > 0$ sweeping along a segment
+from $(u,z)$ to $(u+v,z+w)$, where $u,v \in \R^2$ and $z,w \in \R$.  At time $t \in [0,1]$, the tip
+of the mill is at position $(u+tv,z+tw)$.  What time $t$ maximizes the height of the mill over the origin?
+
+We will split the derivation into several parts.  First, we evaluate the height of the mill at a horizontal
+distance $r$ away from the tip.  Since the mill is a sphere centered at $(0,R)$, this height $g(r)$ satisfies
+\begin{align*}
+r^2 + (g - R)^2 &= R^2 \\
+(g - R)^2 &= R^2 - r^2 \move{Move $+r^2$ to RHS} \\
+g - R &= \pm \sqrt{R^2 - r^2} \move{Move $\sqrt{\cdot}$ to RHS}\\
+g &= R \pm \sqrt{R^2 - r^2} \move{Move $-R$ to RHS} \\
+g &= R - \sqrt{R^2 - r^2} \move{Choose positive sign} \\
+g_r &= \frac{r}{\sqrt{R^2 - r^2}} \move{Differentiate w.r.t.\ $r$}
+\end{align*}
+Second, treating $g(r)$ temporarily as an unknown function of $r$, the height above the origin at time $t$
+satisfies
+\begin{align*}
+h &= g(|u+tv|) + z + tw \\
+h_t &= g_r(|u+tv|) \frac{v \cdot (u + tv)}{|u+tv|} + w & \move{Differentiate w.r.t.\ $t$}
+\end{align*}
+Finally, we substitute in our equation for $g_r$ and set $h_t = 0$ to get
+\begin{gather*}
+\frac{|u+tv|}{\sqrt{R^2 - |u+tv|^2}} \frac{v \cdot (u+tv)}{|u+tv|} + w = 0 \move{Substitute for $g_r$} \\
+\frac{v \cdot (u+tv)}{\sqrt{R^2 - |u+tv|^2}} + w = 0  \move{Simplify} \\
+\frac{v \cdot (u+tv)}{\sqrt{R^2 - |u+tv|^2}} = -w \move{Move $+w$ to RHS} \\
+v \cdot (u+tv) = -w \sqrt{R^2 - |u+tv|^2} \move{Move $/ \sqrt{\cdot}$ to RHS} \\
+u\cdot v+t|v|^2 = -w \sqrt{R^2 - |u+tv|^2} \move{Distribute $v \cdot$ on RHS} \\
+(u\cdot v+t|v|^2)^2 = w^2 (R^2 - |u+tv|^2) \move{Square both sides} \\
+(u\cdot v+t|v|^2)^2 = w^2 (R^2 - |u|^2 - 2tu\cdot v - t^2|v|^2) \move{Expand square on RHS} \\
+(u\cdot v)^2+2t|v|^2 u \cdot v + t^2 |v|^4 = w^2 (R^2 - |u|^2 - 2tu\cdot v - t^2|v|^2) \move{Expand square on LHS} \\
+(u\cdot v)^2-w^2 R^2 + w^2 |u|^2 +2t|v|^2 u \cdot v + t^2 |v|^4 = w^2 (- 2tu\cdot v - t^2|v|^2) \move{Move term to LHS} \\
+(u\cdot v)^2-w^2 R^2 + w^2 |u|^2 + 2t|v|^2 u \cdot v + 2t w^2 u\cdot v + t^2 |v|^4 + t^2 w^2 |v|^2 = 0 \move{Same}\\
+(u\cdot v)^2-w^2 R^2 + w^2 |u|^2 + 2t u \cdot v(|v|^2 + w^2) + t^2 |v|^2 (|v|^2 + w^2) = 0 \move{Same}
+\end{gather*}
+which is a quadratic equation for $t$.
+
+\section{Operations}
+
+I've labeled each step in the example with the operation performed, so we must consider whether each operation
+can be implemented efficiency.  Computational efficiency shouldn't be a problem; the real question is how quickly
+the user can specify each of the required operations.
+
+\begin{enumerate}
+\item \blue{Move an operation to a different place:} Here the user grabs a portion of the equation
+acting on another part of the equation and moves it to act on a different part of the equation.  Thinking in
+terms of action rather than the portion itself is useful since it includes \emph{how} the equation should
+act, whether additively, multiplicatively, etc.  Once moved, the action might change, such as from
+addition to subtraction.  The critical quantities are how long it takes the user to select a term to move,
+and how long it takes them to specify where to put it.  The latter can be dramatically reduced if the only
+selectable places are those which form an equivalent equation, which is doable as long as the primitive
+implication questions can be resolved quickly enough.
+
+Let's assume that a typical equation has up to 100 nodes in its expression tree.  If the user
+selects a term and begins dragging, we need to check in real time which of these places the term can be
+correctly inserted to provide dragging hints.  For each place, we need to try several different kinds of
+operations: let's overestimate and say that 10 variants need be checked.  Checking a variant is roughly
+like evaluating the equation as a polynomial in one of its variables.  If divisions and square roots are
+taken into account, the effective degree might be around 1000, and one check would take on the 
+order of $1000 \cdot 100 \cdot 10 = 10^6$ operations (degree $\times$ terms $\times$ operation overhead).  This
+might be tricky for Javascript but is easy in native code.  If threading and other optimizations save a
+factor of 10, the entire process would take $1/10$ s, which would be fast enough.
+
+\item \blue{Choose positive sign:} Here the user either edits the formula directly or selects the sign
+from a dropdown menu.  The main cognitive and computational load comes from the multivalued nature of
+square roots, which will often mean that the implications between formulas flow in only one direction.
+Computationally $\pm$ can be handled by simply trying both alternatives.  Usually there's only one or two
+of these, so the slowdown is minor.
+
+\item \blue{Substitute:} Trivial.
+
+\item \blue{Simplify:} We do want some automatic simplification support, but it can be far simpler than
+in traditional systems.  Most simplications can be achieved by trying all pairs of terms and checking
+whether we can eliminate both of them.  The primitive here is identity testing, not equivalence testing,
+so one such simplification pass would take roughly $100^2 \cdot 100 \cdot 10 = 10^7$ operations, which
+is cheap.
+
+\item \blue{Distribute:} The general distributivity principle has the form
+\begin{align*}
+f(g(x,y)) = g'(f'(x),f'(y))
+\end{align*}
+That is, a unary function commutes through a binary function, possibly with the functions changing
+in the process.  There's no need to hard code the set of principles: if the set of functions is small,
+it's easy to learn all the small principles by brute force search.  Missing principles could be added
+by the user.
+
+\item \blue{Differentiate:} Basic chain rule differentiation followed by a simplification pass to remove
+unnecessary clutter.
+\end{enumerate}
+
+\section{Other details}
+
+\subsection{Vector math}
+
+The beauty of Schwartz-Zippel style testing is its easy extension to ``more complicated'' operations such
+as tensor algebra; indeed, the core identity and equivalence testing layer doesn't see any difference.
+A bit of work is required to make the distributivity and differentiation layers flexible, but it should
+be quite practical.  The same goes for other operations on $\R^k$, in particular truncated infinitesimal
+series such as $x + \epsilon y$ with automatic differentiation.  Ideally, we'd have a small layer allowing
+the user to define new types (all set-isomorphic to some $\R^k$) together with possibly overloaded
+operations and simple type inference.
+
+\subsection{Algorithmic requirements}
+
+Polynomial and rational equations are both straightforward to test, either for identity or implication.
+For polynomial identities we use Schwartz-Zippel directly modulo a randomly chosen prime, and for rational
+identities we simply apply Schwartz-Zippel to the numerator.  Polynomial implication requires testing
+polynomial divisibility, and rational implication should be similar.
+
+Unfortunately, square roots are significantly more complicated.  If we work over a finite field, they
+can still be done exactly, so identity testing is still reasonably easy.  However, implication testing
+is significantly harder, and might require transforming away from black box form.  Thus, I'm going
+to revisit the above move types to see if they can be verified using identity testing only.
+
+\subsection{Arithmetic}
+
+Arithmetic can be performed either in a randomly chosen finite field or over using floating point.
+Finite fields are great for rational functions, and as noted can be extended to small roots.  However,
+the root extension already has a significant cost: the square root itself is at least an order of magnitude
+slower, and each one taken doubles the number of evaluations required since only half the field elements
+have square roots.
+
+Interval arithmetic is probably a better choice.  It isn't perfect: an interval evaluation can only prove
+that an evaluation is false, and unlike finite fields we would lack rigorous probability estimates.
+However, as an initial prototype it should be perfectly sufficient.
+
+\section{Identity testing only}
+
+As mentioned above, I'm worried that equivalence testing is ``too hard'', mostly in the sense that it
+doesn't easily generalize to fancier kinds of formulas (or programs).  It is also up to several orders
+of magnitude slower than identity testing.  Therefore, let's express the various types of moves in terms
+of identity testing only:
+
+\begin{enumerate}
+\item \blue{Move an operation to a different place:} All of the moves in our example have
+the form
+\begin{align*}
+f(x) = y \quad&\blue{\mapsto}\quad x = g(y)
+\end{align*}
+where $g$ is the inverse of $f$.  Even if we don't know the details of $f$ and $g$, the move can be
+checked via the identities
+\begin{align*}
+f(g(x)) &= g(f(x)) = x
+\end{align*}
+Another kind of move that might show up is a within-formula move, such as rearranging some terms.
+Those kinds of moves typically don't change the value of the ancestor node, so the before and after
+values can be checked with identity testing.  Indeed, if such a move is entirely within the left or
+right hand side of the equation, we can simply check whether the side that changed is the same.
+
+\item \blue{Change positive sign:} No change.
+\item \blue{Substitute:} Trivial.
+\item \blue{Simplify:} Same.
+\item \blue{Distribute:} Same.
+\item \blue{Differentiate:} Same.
+\end{enumerate}
+
+Well, that was easy.  Identity testing only it is.
+
+\end{document}

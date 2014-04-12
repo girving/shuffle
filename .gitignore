@@ -1,0 +1,6 @@
+.sconsign.dblite
+*.aux
+*.fls
+*.log
+*.out
+shuffle.pdf
