@@ -50,28 +50,54 @@
 \begin{document}
 \maketitle
 
-\section{Problem}
+\section{Introduction}
 
-I want an iPad app for manipulating algebraic formulas built on iterating the following operation:
+Our goal is a system for manipulating algebraic formulas interactively.  Here interactively means
+that the user will be directing most of the changes, with assistance from the computer in making
+the changes quickly and verifying their correctness.  In contrast, typical computer algebra systems
+such as Mathematica have quite powerful automatic tools for simplification, transformation, etc., but
+these tools do not always achieve the desired goal.  A system oriented towards interactivity has two
+key strengths:
 \begin{enumerate}
-\item Make an incorrect change to the formula, either by editing it explicitly, or dragging some terms
-      around via touchscreen.
-\item Run an algorithm that makes the smallest possible change to the new formula that (1) produces a
-      correct formula and (2) doesn't undo the user's move.
-\item If (2) times out, or the smallest found change is too large, highlight the terms that seem to
-      contribute to the problem. If that fails, just mark the whole thing red.
+\item {\bf Understanding:} A system which presents an entire derivation as a single step provides no
+insight as to how this transformation was achieved.  Besides the educational advantages, presenting
+the derivation as a transparent chain of simple steps provides insight into generalizability, numerical
+stability, physical meaning, etc.
+\item {\bf Flexibility:} Taking simplification as an example, there are a wide range of goals that the
+user may wish to achieve in manipulating a formula, including efficient computability, numerical stability,
+or suitability for some followup transform.  Although it may be possible to program the \verb+Simplify+
+routine of a computer algebra system to achieve one of these goals, an interactive system can achieve any
+of them even if the user only has a vague idea of the goal in advance.
 \end{enumerate}
 
-What would it take to implement this?  We will focus on the case of bidirectional equivalence, where
-we start with an equation $f(x_i) = 0$ and transition through a series of equations $f_k(x_i) = 0$
-with $f = f_0$ s.t.\ each pair of equations is equivalent.
+\section{Plan}
 
-We will require a routine answering the following question: does $f(x_i) = 0$ imply $g(x_i) = 0$?
-I believe it's not to hard to implement this, at least approximately, for $f$ and $g$ including
-rational functions and square roots.  For details, see
-\url{http://rjlipton.files.wordpress.com/2009/11/schwartz.pdf}.
+The user starts with a formula (or possibly several formulae), and makes a series of changes or \emph{moves}.
+Each move is both checked for validity by the program, and additionally hinted so that it can be made
+quicker.  For example, the user can drag a term from one place to another; once the term is in motion, only
+locations which produce a correct result will be available for selection.  Similarly, moves will be disambiguated
+based on correctness: if the user drags an additive term, it will switch to subtractive if that is required for
+validity.
 
-\newpage
+An earlier version of this plan relied on an algorithm for predicates of the form
+$$f(x) = 0 \implies g(x) = 0$$
+Although this would have simplified the outer algorithm levels,
+the required algorithmic complexity seemed dangerously high on further reflection: although implication
+is easy for polynomial formulas, the complexity would likely grow by an order of magnitude if divisions
+are included, and by several more with square roots.  As we will see below, all the moves required for
+our example derivation can be performed using only predicates of the form
+$$f(x) = 0$$
+That is, by taking advantage of interactivity, it suffices to use identity testing rather than implication
+testing.  The advantage of pure identity testing is huge, both in terms of speed and flexibility.  Speed
+can be spent on simple programming or more powerful outer level algorithms to reduce the required input
+from the user.  Identity testing amounts to plugging in numbers and checking whether the formula holds,
+and is therefore easily generalizable to more complicated expressions or programs.  For details on randomized
+testing of identities, implications, etc., see \cite{schwartz1980fast,tulone2001randomized,chen2011partial}.
+
+Rather than guess the set of moves required to make the program useful, we will work through an example
+derivation first (arising from work on Othermill), and then discuss how each type of move can be implemented
+using identity testing.
+
 \section{Example}
 
 As a concrete example of a derivation, consider a ball mill of radius $R > 0$ sweeping along a segment
@@ -116,99 +142,31 @@ I've labeled each step in the example with the operation performed, so we must c
 can be implemented efficiency.  Computational efficiency shouldn't be a problem; the real question is how quickly
 the user can specify each of the required operations.
 
-\begin{enumerate}
-\item \blue{Move an operation to a different place:} Here the user grabs a portion of the equation
+\subsection{\blue{Move an operation to a different place}}
+Here the user grabs a portion of the equation
 acting on another part of the equation and moves it to act on a different part of the equation.  Thinking in
-terms of action rather than the portion itself is useful since it includes \emph{how} the equation should
+terms of action rather than the portion itself may be useful since it includes \emph{how} the equation should
 act, whether additively, multiplicatively, etc.  Once moved, the action might change, such as from
 addition to subtraction.  The critical quantities are how long it takes the user to select a term to move,
 and how long it takes them to specify where to put it.  The latter can be dramatically reduced if the only
 selectable places are those which form an equivalent equation, which is doable as long as the primitive
 implication questions can be resolved quickly enough.
 
-Let's assume that a typical equation has up to 100 nodes in its expression tree.  If the user
+Let's assume that a typical equation has 100 nodes in its expression tree.  If the user
 selects a term and begins dragging, we need to check in real time which of these places the term can be
 correctly inserted to provide dragging hints.  For each place, we need to try several different kinds of
-operations: let's overestimate and say that 10 variants need be checked.  Checking a variant is roughly
-like evaluating the equation as a polynomial in one of its variables.  If divisions and square roots are
-taken into account, the effective degree might be around 1000, and one check would take on the 
-order of $1000 \cdot 100 \cdot 10 = 10^6$ operations (degree $\times$ terms $\times$ operation overhead).  This
-might be tricky for Javascript but is easy in native code.  If threading and other optimizations save a
-factor of 10, the entire process would take $1/10$ s, which would be fast enough.
+operations: let's say that 10 variants need be checked.  Most variants are wrong, and can be rigorously
+proven wrong using a single evaluation.  If square roots or other multivalued functions appear, several
+evaluations might be required to find the incorrect branch; let's say 10 evaluations are required.  Thus,
+checking whether the term can be correctly placed in one location takes around
+$$100 \textrm{~terms} \cdot 10 \textrm{~variants} \cdot 10 \textrm{~evaluations} \cdot 10 \textrm{~overhead}
+= 10^5 \textrm{~operations}$$
+If Javascript adds an additional $10\times$ overhead, and pessimism adds a final $10\times$, we're at around
+$10\textrm{~ms}$ per location check, which means we can check dozens of locations at once without the user
+noticing any lag.
 
-\item \blue{Choose positive sign:} Here the user either edits the formula directly or selects the sign
-from a dropdown menu.  The main cognitive and computational load comes from the multivalued nature of
-square roots, which will often mean that the implications between formulas flow in only one direction.
-Computationally $\pm$ can be handled by simply trying both alternatives.  Usually there's only one or two
-of these, so the slowdown is minor.
-
-\item \blue{Substitute:} Trivial.
-
-\item \blue{Simplify:} We do want some automatic simplification support, but it can be far simpler than
-in traditional systems.  Most simplications can be achieved by trying all pairs of terms and checking
-whether we can eliminate both of them.  The primitive here is identity testing, not equivalence testing,
-so one such simplification pass would take roughly $100^2 \cdot 100 \cdot 10 = 10^7$ operations, which
-is cheap.
-
-\item \blue{Distribute:} The general distributivity principle has the form
-\begin{align*}
-f(g(x,y)) = g'(f'(x),f'(y))
-\end{align*}
-That is, a unary function commutes through a binary function, possibly with the functions changing
-in the process.  There's no need to hard code the set of principles: if the set of functions is small,
-it's easy to learn all the small principles by brute force search.  Missing principles could be added
-by the user.
-
-\item \blue{Differentiate:} Basic chain rule differentiation followed by a simplification pass to remove
-unnecessary clutter.
-\end{enumerate}
-
-\section{Other details}
-
-\subsection{Vector math}
-
-The beauty of Schwartz-Zippel style testing is its easy extension to ``more complicated'' operations such
-as tensor algebra; indeed, the core identity and equivalence testing layer doesn't see any difference.
-A bit of work is required to make the distributivity and differentiation layers flexible, but it should
-be quite practical.  The same goes for other operations on $\R^k$, in particular truncated infinitesimal
-series such as $x + \epsilon y$ with automatic differentiation.  Ideally, we'd have a small layer allowing
-the user to define new types (all set-isomorphic to some $\R^k$) together with possibly overloaded
-operations and simple type inference.
-
-\subsection{Algorithmic requirements}
-
-Polynomial and rational equations are both straightforward to test, either for identity or implication.
-For polynomial identities we use Schwartz-Zippel directly modulo a randomly chosen prime, and for rational
-identities we simply apply Schwartz-Zippel to the numerator.  Polynomial implication requires testing
-polynomial divisibility, and rational implication should be similar.
-
-Unfortunately, square roots are significantly more complicated.  If we work over a finite field, they
-can still be done exactly, so identity testing is still reasonably easy.  However, implication testing
-is significantly harder, and might require transforming away from black box form.  Thus, I'm going
-to revisit the above move types to see if they can be verified using identity testing only.
-
-\subsection{Arithmetic}
-
-Arithmetic can be performed either in a randomly chosen finite field or over using floating point.
-Finite fields are great for rational functions, and as noted can be extended to small roots.  However,
-the root extension already has a significant cost: the square root itself is at least an order of magnitude
-slower, and each one taken doubles the number of evaluations required since only half the field elements
-have square roots.
-
-Interval arithmetic is probably a better choice.  It isn't perfect: an interval evaluation can only prove
-that an evaluation is false, and unlike finite fields we would lack rigorous probability estimates.
-However, as an initial prototype it should be perfectly sufficient.
-
-\section{Identity testing only}
-
-As mentioned above, I'm worried that equivalence testing is ``too hard'', mostly in the sense that it
-doesn't easily generalize to fancier kinds of formulas (or programs).  It is also up to several orders
-of magnitude slower than identity testing.  Therefore, let's express the various types of moves in terms
-of identity testing only:
-
-\begin{enumerate}
-\item \blue{Move an operation to a different place:} All of the moves in our example have
-the form
+The above time estimate was made assuming that identity testing suffices, which remains to be established.
+All of the moves in our example have the form
 \begin{align*}
 f(x) = y \quad&\blue{\mapsto}\quad x = g(y)
 \end{align*}
@@ -222,13 +180,116 @@ Those kinds of moves typically don't change the value of the ancestor node, so t
 values can be checked with identity testing.  Indeed, if such a move is entirely within the left or
 right hand side of the equation, we can simply check whether the side that changed is the same.
 
-\item \blue{Change positive sign:} No change.
-\item \blue{Substitute:} Trivial.
-\item \blue{Simplify:} Same.
-\item \blue{Distribute:} Same.
-\item \blue{Differentiate:} Same.
-\end{enumerate}
+\subsection{\blue{Choose positive sign}}
+Here the user either edits the formula directly or selects the sign
+from a dropdown menu.  The main cognitive and computational load comes from the multivalued nature of
+square roots, which will often mean that the implications between formulas flow in only one direction.
+Computationally $\pm$ can be handled by simply trying both alternatives.  Usually there's only one or two
+of these, so the slowdown is minor.
 
-Well, that was easy.  Identity testing only it is.
+\subsection{\blue{Substitute}}
+Trivial.
 
+\subsection{\blue{Simplify}}
+We do want some automatic simplification support, but it can be far simpler than
+in traditional systems.  Most simplications can be achieved by trying all pairs of terms and checking
+whether we can eliminate both of them.  Only identity testing is required, so one such simplification
+pass would take roughly $100^2 \cdot 100 \cdot 10 = 10^7$ operations (cheap).
+
+\subsection{\blue{Distribute}}
+The general distributivity principle has the form
+\begin{align*}
+f(g(x,y)) = g'(f'(x),f'(y))
+\end{align*}
+That is, a unary function commutes through a binary function, possibly with the functions changing
+in the process.  There's no need to hard code the set of principles: if the set of functions is small,
+it's easy to learn all the small principles by brute force search.  Missing principles could be added
+by the user.
+
+\subsection{\blue{Differentiate}}
+Basic chain rule differentiation followed by a simplification pass to remove unnecessary clutter.
+
+\section{Some details}
+
+\subsection{Vector math}
+
+The beauty of Schwartz-Zippel style testing is its easy extension to ``more complicated'' operations such
+as tensor algebra; indeed, the core identity testing layer doesn't see any difference.
+A bit of work is required to make the distributivity and differentiation layers flexible, but it should
+be quite practical, and any user input is easily unit tested numerically.   The same goes for other
+operations on $\R^k$, in particular truncated infinitesimal series such as $x + \epsilon y$ with automatic
+differentiation.  Ideally, we'd have a small layer allowing the user to define new types (all set-isomorphic
+to some $\R^k$) together with possibly overloaded operations and simple type inference.
+
+\subsection{Algorithmic requirements}
+
+Polynomial and rational equations are both straightforward to test for correctness, and not too much harder
+to test for implication.  Unfortunately, the cost of implication testing jumps dramaticatically even for
+rational functions since the degree bound grows exponentially even through additions.  For identity testing
+this isn't a problem, since the degree only has to be much less than the available precision, but implication
+testing requires operations on unary polynomials and thus degree matters more.  In either case we can either
+use evaluation modulo a randomly chosen prime if rigorous probabilities are required, or interval arithmetic
+if we're lazier.
+
+Unfortunately, square roots are significantly more complicated.  If we work over a finite field, they
+can still be done exactly, so identity testing is still reasonably easy.  However, implication testing
+is significantly harder, and might require transforming away from black box form.  This is the main motivating
+for formulating the internals in terms of identity testing only.
+
+\subsection{Arithmetic}
+
+Arithmetic can be performed either in a randomly chosen finite field or over using floating point.
+Finite fields are great for rational functions, and as noted can be extended to small roots.  However,
+the root extension already has a significant cost: the square root itself is at least an order of magnitude
+slower, and each one taken doubles the number of evaluations required since only half the field elements
+have square roots.
+
+Interval arithmetic is probably a better choice.  It isn't perfect: an interval evaluation can only prove
+that an equation is false, not true, so unlike finite fields we would lack rigorous probability estimates.
+However, the benefit in flexibility and generality is huge, and wins over rigor for our purposes.  Rigor
+can be restored piecemeal later on if required.
+
+\subsection{User interface}
+
+The main challenge in the user interface is to make the initial selection of terms fast and easy.  Once a term
+is selected, identity testing-based hinting turns onx, and choosing where the term goes is easier.  Standard
+drag-based selection would work, but is a bit time consuming for the user; we may be able to do better by taking
+advantage of knowledge of the recursive structure.  For example, selections could be made by clicking on a symbol
+inside a term, then dragging up or down to indicate how large a term to select.  Whether the tool is pleasant
+to use will dependent critically on the ease of selection, so it will be worth playing around with different
+methods.
+
+\subsection{Platform and language}
+
+All of the required computation should be fast enough to handle at interactive rates in Javascript, so the main
+choice is between client-only Javascript and iOS/Android.  The main reason for mobile would be if touch allows
+faster or more intuitive selection.  The ideal case would be if we can access intuitive touchscreen gestures
+from pure Javascript, but I'm not sure if that is possible.
+
+\section{Handling arbitrary code?}
+
+The background motivation here is verified, interactive programming.  Algebraic manipulation alone is already
+interesting, but it's worth asking how much of this could be generalized to other types of code.
+
+Boring answer: it depends on the code.  The underlying trick that makes identity testing-based algebra work is that
+we know all the moves, and can design essentially perfect unit tests \emph{for each move}.  We never test
+the validity of the entire formula; usually the formula isn't an identity so testing it is meaningless.
+Instead, the specification of correctness is encoded in the string of derivations, and in our autogenerated
+unit tests that each move is correct.
+
+For codebases that have simple specifications, and grow in complexity from there to handle new features,
+improve parallelism, or distribution over different machines, a similar style of interactive gradual programming
+would likely work.  More importantly, it could work on part of a codebase even if the rest is out of reach:
+as long as a move is local, the automatically generated unit test which verifies it is also local, and need
+not depend on unrelated code that we don't understand.
+
+How practical such a system would actually be could be estimated by mapping it out in the same way we
+worked through the small example above.  The pentago codebase could likely be made to work this
+way, as most of the unit tests are already structured as identity tests between simple slow routines and complex
+fast routines \cite{irving2014pentago}.  A more useful but also likely example would be fast multipole-based
+gravity codes such as \cite{warren20132hot}.  Here again the serial, slow version could be written in a few dozen
+lines of code, and the fast version must be gradually bootstrapped into existence with numerous tests.
+
+\bibliography{references}
+\bibliographystyle{acm}
 \end{document}
